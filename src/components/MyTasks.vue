@@ -2,22 +2,22 @@
   <div class="my-tasks-container bg-white p-6 rounded-xl shadow-lg">
     <div class="flex justify-between items-center mb-6">
       <h3 class="text-xl font-semibold text-gray-800">我的优先任务</h3>
-      <button class="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center" aria-label="查看所有任务">
-        查看全部 <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
+      <button class="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center">
+        查看全部 <i class="fas fa-arrow-right ml-1 text-xs"></i>
       </button>
     </div>
-    
     <div class="space-y-4">
       <TaskItem 
-        v-for="task in localTasks.value" 
+        v-for="task in tasks" 
         :key="task.id" 
         :task="task" 
-        @toggle-complete="handleToggleTaskComplete" />
-      
+        @toggle-complete="onToggleComplete"
+        @edit-task="onEditTask" @delete-task="onDeleteTask" />
+      <p v-if="!tasks || tasks.length === 0" class="text-center text-gray-500 py-4">没有匹配的任务。</p>
       <button 
-        class="w-full mt-4 py-3 px-4 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-        aria-label="添加新任务">
-        <i class="fas fa-plus-circle" aria-hidden="true"></i>
+        @click="$emit('add-task-clicked')"
+        class="w-full mt-4 py-3 px-4 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2">
+        <i class="fas fa-plus-circle"></i>
         <span>添加新任务</span>
       </button>
     </div>
@@ -25,50 +25,33 @@
 </template>
 
 <script>
-import { defineComponent, ref, watch } from '@vue/composition-api';
-import TaskItem from './TaskItem.vue'; // 导入子组件
+import { defineComponent } from '@vue/composition-api';
+import TaskItem from './TaskItem.vue';
 
 export default defineComponent({
   name: 'MyTasks',
-  components: { // 注册子组件
-    TaskItem,
-  },
+  components: { TaskItem },
   props: {
-    // 定义 props，期望接收一个名为 'tasks' 的数组
-    tasks: {
-      type: Array,
-      required: true,
-      default: () => [] // 默认值为空数组
-    }
+    tasks: Array
   },
-  setup(props, { emit }) { // emit 可以从 context 中解构
-    // 创建一个本地的响应式副本，以便在组件内部修改任务状态
-    // 使用 JSON.parse(JSON.stringify(...)) 进行深拷贝，避免直接修改 props
-    const localTasks = ref(JSON.parse(JSON.stringify(props.tasks || [])));
+  setup(props, { emit }) {
+    const onToggleComplete = (taskId) => {
+      emit('task-toggled', taskId);
+    };
 
-    // 使用 watch 监听外部 props.tasks 的变化，以同步更新本地的 localTasks
-    // 这在父组件异步加载数据时很有用
-    watch(() => props.tasks, (newTasks) => {
-      localTasks.value = JSON.parse(JSON.stringify(newTasks || []));
-    }, { 
-      deep: true,      // 深度监听对象内部属性的变化
-      immediate: true  // 立即执行一次 watcher，以便在组件初始化时同步数据
-    });
+    const onDeleteTask = (taskId) => {
+      emit('delete-task-requested', taskId); 
+    };
 
-    // 处理 TaskItem 组件触发的 'toggle-complete' 事件
-    const handleToggleTaskComplete = (taskId) => {
-      const task = localTasks.value.find(t => t.id === taskId);
-      if (task) {
-        task.completed = !task.completed;
-        // 在真实应用中, 这里通常会调用 API 更新后端数据
-        // console.log(`Task ${taskId} completion toggled to: ${task.completed}`);
-        // emit('task-updated', task); // 可以选择性地向上层组件发送事件，通知任务状态已更新
-      }
+    // 新增：处理编辑事件并向上触发
+    const onEditTask = (task) => {
+      emit('edit-task-requested', task); // 触发新事件给 App.vue，传递整个任务对象
     };
 
     return {
-      localTasks,
-      handleToggleTaskComplete,
+      onToggleComplete,
+      onDeleteTask,
+      onEditTask, // 暴露给模板
     };
   }
 });

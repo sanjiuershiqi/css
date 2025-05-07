@@ -2,7 +2,9 @@
   <div
     class="fixed inset-0 bg-gray-900 bg-opacity-50 z-30 flex items-start justify-end pt-16 pr-4 md:pr-8" 
     @click.self="$emit('close')" 
-    aria-hidden="false"> <div
+    aria-hidden="false">
+
+    <div
       class="w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden transform transition-all"
       role="dialog"
       aria-modal="true"
@@ -20,12 +22,12 @@
       </div>
 
       <div class="max-h-96 overflow-y-auto">
-        <ul v-if="notifications && notifications.length > 0">
+        <ul v-if="localNotifications.value && localNotifications.value.length > 0">
           <li 
-            v-for="notification in notifications" 
+            v-for="notification in localNotifications.value" 
             :key="notification.id"
-            :class="['p-4 hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-100 last:border-b-0', !notification.read ? 'bg-indigo-50' : '']">
-            <p :class="['text-sm text-gray-700', !notification.read ? 'font-medium' : '']">{{ notification.text }}</p>
+            :class="['p-4 hover:bg-gray-100 transition-colors cursor-pointer border-b border-gray-100 last:border-b-0', !notification.read ? 'bg-indigo-50 font-medium' : '']"
+            @click="markAsRead(notification.id)"> <p :class="['text-sm', !notification.read ? 'text-gray-800' : 'text-gray-600']">{{ notification.text }}</p>
             <p class="text-xs text-gray-500 mt-1">{{ notification.time }}</p>
           </li>
         </ul>
@@ -40,29 +42,39 @@
 </template>
 
 <script>
-import { defineComponent } from '@vue/composition-api';
+import { defineComponent, ref, watch } from '@vue/composition-api';
 
 export default defineComponent({
   name: 'NotificationPanel',
   props: {
     notifications: {
       type: Array,
-      default: () => [] // 默认值为空数组
+      default: () => []
     }
-    // 移除了内部的 isVisible prop 和 ref，完全由父组件通过 v-if 控制
   },
-  // setup 函数如果只是为了 emit 事件，且事件在模板中通过 $emit 处理，则可以为空或移除
-  // emits: ['close'] // 在 Vue 2 Options API 中声明 emits，Composition API 中通常在 setup 的 context 中处理
+  setup(props, { emit }) {
+    // 创建本地副本以便修改 read 状态
+    const localNotifications = ref([]);
+
+    watch(() => props.notifications, (newNotifications) => {
+      // 深拷贝以避免直接修改 prop
+      localNotifications.value = JSON.parse(JSON.stringify(newNotifications || []));
+    }, { immediate: true, deep: true });
+
+    const markAsRead = (notificationId) => {
+      const notification = localNotifications.value.find(n => n.id === notificationId);
+      if (notification && !notification.read) {
+        notification.read = true;
+        // 在真实应用中，这里会通知父组件或API更新后端状态
+        emit('notification-read', notificationId); 
+        console.log(`通知 ${notificationId} 已标记为已读 (本地)`);
+      }
+    };
+
+    return {
+      localNotifications,
+      markAsRead,
+    };
+  }
 });
 </script>
-
-<style scoped>
-/* 如果需要特定的过渡动画，最好配合 Vue 的 <transition> 组件使用 */
-/* 这里的 transform 和 opacity 过渡可能不会在 v-if 直接添加/移除元素时平滑生效 */
-/*.fixed {
-  transition: opacity 0.3s ease-out;
-}
-.transform {
-  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
-}*/
-</style>

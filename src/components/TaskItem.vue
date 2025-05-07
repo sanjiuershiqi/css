@@ -17,19 +17,25 @@
       </div>
     </div>
     
-    <div class="flex items-center space-x-3 flex-shrink-0 ml-2">
-      <span v-if="task.completed" class="text-sm text-green-600 whitespace-nowrap">
+    <div class="flex items-center space-x-2 md:space-x-3 flex-shrink-0 ml-2">
+      <span v-if="task.completed" class="text-sm text-green-600 whitespace-nowrap hidden md:inline-flex items-center">
         <i class="fas fa-check-circle mr-1" aria-hidden="true"></i> 已完成
       </span>
-      <span v-else class="text-sm text-gray-500 whitespace-nowrap">
+      <span v-else class="text-sm text-gray-500 whitespace-nowrap hidden md:inline-flex items-center">
         <i class="fas fa-clock mr-1" aria-hidden="true"></i> {{ task.dueDate }}
       </span>
       <img 
         v-if="task.assignee"
         :src="`https://placehold.co/24x24/${task.assignee.avatarColor || 'CCCCCC'}/FFFFFF?text=${task.assignee.avatarChar || '?'}`" 
         :alt="task.assignee.name || '未分配'" 
-        class="w-6 h-6 rounded-full" 
+        class="w-6 h-6 rounded-full hidden sm:block" 
         :title="task.assignee.name || '未分配'">
+      <button 
+        @click.stop="$emit('edit-task', task)" 
+        class="text-gray-400 hover:text-indigo-500 focus:outline-none focus:text-indigo-500 transition-colors p-1 rounded-full"
+        aria-label="编辑任务">
+        <i class="fas fa-pencil-alt text-sm"></i>
+      </button>
       <button 
         @click.stop="$emit('delete-task', task.id)" 
         class="text-gray-400 hover:text-red-500 focus:outline-none focus:text-red-500 transition-colors p-1 rounded-full"
@@ -61,8 +67,7 @@ export default defineComponent({
       })
     }
   },
-  // Emits 'toggle-complete' when checkbox changes
-  // Emits 'delete-task' when delete button is clicked
+  // Emits 'toggle-complete', 'edit-task', 'delete-task'
 });
 </script>
 

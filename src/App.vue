@@ -14,44 +14,91 @@
       />
 
       <main class="flex-1 p-6 md:p-8 space-y-8">
-        <div v-if="isLoading.value" class="text-center py-10 text-gray-500">
-          <i class="fas fa-spinner fa-spin text-2xl"></i> 加载中...
+        <div v-if="isLoading.value" class="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50">
+          <i class="fas fa-spinner fa-spin text-3xl text-indigo-600"></i>
+          <span class="ml-3 text-gray-700">处理中...</span>
         </div>
-        <template v-else>
-          <section>
-            <h2 class="text-3xl font-semibold text-gray-800 mb-2">早上好, {{ userName.value }}!</h2>
-            <p class="text-gray-600 mb-1">当前视图: <span class="font-semibold text-indigo-600">{{ currentViewTitle.value }}</span></p>
-            <p class="text-gray-600 mb-6">这是您今天的仪表盘概览。</p>
-          </section>
+        
+        <section>
+          <h2 class="text-3xl font-semibold text-gray-800 mb-2">早上好, {{ userName.value }}!</h2>
+          <p class="text-gray-600 mb-6">您当前正在查看: <span class="font-semibold text-indigo-600">{{ currentViewTitle.value }}</span></p>
+        </section>
 
-          <StatsGrid :stats="dashboardStats.value" />
-
-          <section class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <template v-if="currentView.value === '仪表盘'">
+          <StatsGrid :stats="dashboardStats.value" @stat-card-clicked="handleStatCardClick" />
+          <section class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
             <MyTasks 
               :tasks="filteredTasks.value" 
-              @add-task-clicked="openAddTaskModal"
+              @add-task-clicked="openTaskModalForAdd"
               @task-toggled="handleToggleTask" 
-              @delete-task-requested="handleDeleteTask" class="lg:col-span-2" />
+              @edit-task-requested="openTaskModalForEdit"
+              @delete-task-requested="handleDeleteTask"
+              class="lg:col-span-2" />
             <ProjectProgressList :projects="projectProgressData.value" />
           </section>
+          <RecentActivity :activities="recentActivities.value" class="mt-8" />
+        </template>
+        
+        <template v-else-if="currentView.value === '我的任务'">
+          <section class="bg-white p-6 rounded-xl shadow-lg">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-4">所有任务</h3>
+            <MyTasks 
+              :tasks="userTasks.value" @add-task-clicked="openTaskModalForAdd"
+              @task-toggled="handleToggleTask" 
+              @edit-task-requested="openTaskModalForEdit"
+              @delete-task-requested="handleDeleteTask"
+            />
+          </section>
+        </template>
 
-          <RecentActivity :activities="recentActivities.value" />
+        <template v-else-if="currentView.value === '项目'">
+           <section class="bg-white p-6 rounded-xl shadow-lg">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-4">项目列表</h3>
+            <p class="text-gray-600">这里将显示您的项目列表和详细信息。</p>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-for="proj in projectProgressData.value" :key="'proj-list-' + proj.id" class="p-4 border rounded-lg hover:shadow-md transition-shadow">
+                <h4 class="font-semibold text-indigo-700">{{ proj.name.replace('(Vue 2)', '').trim() }}</h4>
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                  <div :class="['h-2.5 rounded-full', proj.color]" :style="{ width: proj.progress + '%' }"></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">{{ proj.progress }}% 完成</p>
+              </div>
+            </div>
+          </section>
+        </template>
+        
+        <template v-else-if="currentView.value === '报告'">
+           <section class="bg-white p-6 rounded-xl shadow-lg">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-4">报告中心</h3>
+            <p class="text-gray-600">这里将生成和显示各种项目报告和数据分析图表。</p>
+            <div class="mt-6 h-64 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
+              [图表区域占位符]
+            </div>
+          </section>
+        </template>
+
+        <template v-else>
+          <section class="bg-white p-6 rounded-xl shadow-lg">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-4">{{ currentViewTitle.value }}</h3>
+            <p class="text-gray-600">此模块内容正在建设中...</p>
+          </section>
         </template>
       </main>
     </div>
 
-    <AddTaskModal 
-      v-if="showAddTaskModal.value" 
-      @close="closeAddTaskModal"
-      @save-task="handleSaveNewTask" 
+    <TaskFormModal 
+      v-if="showTaskModal.value" 
+      :task-to-edit="editingTask.value"
+      @close="closeTaskModal"
+      @save-task="handleSaveTask" 
     />
 
     <NotificationPanel 
       v-if="showNotificationPanel.value"
       :notifications="mockNotifications.value"
       @close="closeNotificationPanel" 
+      @notification-read="handleNotificationRead"
     />
-
   </div>
 </template>
 
@@ -63,251 +110,207 @@ import StatsGrid from './components/StatsGrid.vue';
 import MyTasks from './components/MyTasks.vue';
 import ProjectProgressList from './components/ProjectProgressList.vue';
 import RecentActivity from './components/RecentActivity.vue';
-import AddTaskModal from './components/AddTaskModal.vue';
+import TaskFormModal from './components/TaskFormModal.vue'; // 重命名
 import NotificationPanel from './components/NotificationPanel.vue';
 
-// 本地存储的 Key
-const LOCAL_STORAGE_TASKS_KEY = 'vue2-dashboard-tasks';
-const LOCAL_STORAGE_ACTIVITIES_KEY = 'vue2-dashboard-activities';
+const LOCAL_STORAGE_TASKS_KEY = 'vue2-dashboard-tasks-v2';
+const LOCAL_STORAGE_ACTIVITIES_KEY = 'vue2-dashboard-activities-v2';
+const LOCAL_STORAGE_NOTIFICATIONS_KEY = 'vue2-dashboard-notifications-v2';
 
 export default defineComponent({
   name: 'App',
   components: {
-    Sidebar,
-    Header,
-    StatsGrid,
-    MyTasks,
-    ProjectProgressList,
-    RecentActivity,
-    AddTaskModal,
-    NotificationPanel,
+    Sidebar, Header, StatsGrid, MyTasks, ProjectProgressList, RecentActivity, TaskFormModal, NotificationPanel,
   },
   setup() {
     const isSidebarOpen = ref(false);
-    const userName = ref('尊贵的用户 (Vue 2)');
+    const userName = ref('尊贵的用户');
     const currentView = ref('仪表盘'); 
-    const isLoading = ref(true); // 添加加载状态
+    const isLoading = ref(true);
     
-    const showAddTaskModal = ref(false);
+    const showTaskModal = ref(false); // 通用任务模态框
+    const editingTask = ref(null); // 当前正在编辑的任务，null 表示添加模式
     const showNotificationPanel = ref(false);
     const searchTerm = ref('');
 
-    // --- 响应式数据 ---
-    const dashboardStats = ref([]); // 将从模拟 API 加载
-    const userTasks = ref([]); // 将从 localStorage 或 模拟 API 加载
-    const projectProgressData = ref([]); // 将从模拟 API 加载
-    const recentActivities = ref([]); // 将从 localStorage 或 模拟 API 加载
-    
-    const mockNotifications = ref([
-        { id: 1, text: '新任务 "部署生产环境" 已分配给您。', time: '10分钟前', read: false },
-        { id: 2, text: '项目 "凤凰项目" 即将到期。', time: '1小时前', read: true },
-        { id: 3, text: '您有一条新消息来自 李明。', time: '3小时前', read: false },
-    ]);
+    const dashboardStats = ref([]);
+    const userTasks = ref([]);
+    const projectProgressData = ref([]);
+    const recentActivities = ref([]);
+    const mockNotifications = ref([]);
 
-    // --- 计算属性 ---
     const currentViewTitle = computed(() => currentView.value);
 
     const filteredTasks = computed(() => {
+      if (currentView.value !== '仪表盘' && currentView.value !== '我的任务') return []; // 只在特定视图过滤
+      const tasksToFilter = (currentView.value === '我的任务') ? userTasks.value : userTasks.value.filter(t => !t.completed); // 仪表盘只显示未完成
+
       if (!searchTerm.value) {
-        return userTasks.value;
+        return tasksToFilter;
       }
       const lowerSearchTerm = searchTerm.value.toLowerCase();
-      return userTasks.value.filter(task => 
+      return tasksToFilter.filter(task => 
         task.title.toLowerCase().includes(lowerSearchTerm) ||
         task.project.toLowerCase().includes(lowerSearchTerm)
       );
     });
 
-    // --- 模拟 API 调用和数据处理 ---
-
-    // 模拟获取数据的函数
-    const fetchData = async () => {
-      isLoading.value = true;
-      console.log("开始加载数据...");
-      try {
-        // 模拟网络延迟
-        await new Promise(resolve => setTimeout(resolve, 500)); 
-
-        // 加载任务列表 (优先从 localStorage 获取)
-        const storedTasks = localStorage.getItem(LOCAL_STORAGE_TASKS_KEY);
-        if (storedTasks) {
-          userTasks.value = JSON.parse(storedTasks);
-        } else {
-          // 如果 localStorage 没有，则使用初始模拟数据
-          userTasks.value = [
-            { id: 1, title: '完成 "凤凰项目" UI设计稿 (Vue 2)', project: '凤凰项目', priority: '高优先级', priorityClass: 'text-red-500', dueDate: '明天', assignee: { name: '李明', avatarChar: 'L', avatarColor: 'FFC107' }, completed: false },
-            { id: 2, title: '准备周会演示文稿 (Vue 2)', project: '内部事务', priority: '中优先级', priorityClass: 'text-yellow-500', dueDate: '已完成', assignee: { name: '张伟', avatarChar: 'Z', avatarColor: '4CAF50' }, completed: true },
-          ];
-          saveTasksToLocalStorage(); // 保存初始数据
-        }
-
-        // 加载活动列表 (优先从 localStorage 获取)
-        const storedActivities = localStorage.getItem(LOCAL_STORAGE_ACTIVITIES_KEY);
-         if (storedActivities) {
-          recentActivities.value = JSON.parse(storedActivities);
-        } else {
-           recentActivities.value = [
-             { id: Date.now(), icon: 'fas fa-info-circle', iconBg: 'bg-blue-100', iconColor: 'text-blue-600', textParts: [{ type: 'normal', content: '欢迎使用仪表盘！' }], time: '刚刚' },
-           ];
-           saveActivitiesToLocalStorage();
-         }
-
-        // 加载其他静态模拟数据
-        dashboardStats.value = [
-          { id: 1, title: '活跃项目', value: '15', icon: 'fas fa-folder-open', trend: '+2 新增', trendColor: 'text-green-500',bgColor: 'bg-blue-100', iconColor: 'text-blue-600' },
-          { id: 2, title: '今日到期任务', value: userTasks.value.filter(t => t.dueDate === '明天' && !t.completed).length.toString(), icon: 'fas fa-calendar-check', trend: '紧急!', trendColor: 'text-red-500', bgColor: 'bg-yellow-100', iconColor: 'text-yellow-600' },
-          { id: 3, title: '已逾期任务', value: '0', icon: 'fas fa-exclamation-triangle', trendColor: 'text-red-600', bgColor: 'bg-red-100', iconColor: 'text-red-600', valueColor: 'text-red-600' }, // 简化处理
-          { id: 4, title: '团队成员', value: '12', icon: 'fas fa-users', avatars: ['A', 'B', 'C'], bgColor: 'bg-purple-100', iconColor: 'text-purple-600' }
-        ];
-        projectProgressData.value = [
-          { id: 1, name: '凤凰项目 - UI/UX (Vue 2)', progress: 75, color: 'bg-indigo-600' },
-          { id: 2, name: '北极星计划 - 后端开发 (Vue 2)', progress: 90, color: 'bg-green-600' },
-        ];
-
-        console.log("数据加载完成。");
-      } catch (error) {
-        console.error("加载数据时出错:", error);
-        // 可以在这里设置错误状态
-      } finally {
-        isLoading.value = false;
-      }
-    };
-
-    // 保存任务到 localStorage
-    const saveTasksToLocalStorage = () => {
+    const loadFromLocalStorage = (key, defaultValue) => {
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_TASKS_KEY, JSON.stringify(userTasks.value));
-        console.log("任务已保存到 localStorage");
+        const stored = localStorage.getItem(key);
+        if (stored) return JSON.parse(stored);
       }
-    };
-    
-    // 保存活动到 localStorage
-    const saveActivitiesToLocalStorage = () => {
-       if (typeof localStorage !== 'undefined') {
-         // 只保存最近的 N 条活动，避免 localStorage 膨胀
-         const MAX_ACTIVITIES = 20;
-         const activitiesToSave = recentActivities.value.slice(0, MAX_ACTIVITIES);
-         localStorage.setItem(LOCAL_STORAGE_ACTIVITIES_KEY, JSON.stringify(activitiesToSave));
-         console.log("活动已保存到 localStorage");
-       }
+      return defaultValue;
     };
 
-    // 添加活动记录的函数
+    const saveToLocalStorage = (key, data, maxItems = null) => {
+      if (typeof localStorage !== 'undefined') {
+        let dataToSave = data;
+        if (maxItems && Array.isArray(data) && data.length > maxItems) {
+          dataToSave = data.slice(0, maxItems);
+        }
+        localStorage.setItem(key, JSON.stringify(dataToSave));
+      }
+    };
+
     const addActivity = (icon, iconBg, iconColor, textParts) => {
       recentActivities.value.unshift({
-        id: Date.now(),
-        icon: icon,
-        iconBg: iconBg,
-        iconColor: iconColor,
-        textParts: textParts,
-        time: '刚刚' // 简化时间显示
+        id: Date.now(), icon, iconBg, iconColor, textParts, time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
       });
-      saveActivitiesToLocalStorage(); // 保存活动
+      saveToLocalStorage(LOCAL_STORAGE_ACTIVITIES_KEY, recentActivities.value, 20);
+    };
+    
+    const fetchData = async () => {
+      isLoading.value = true;
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      userTasks.value = loadFromLocalStorage(LOCAL_STORAGE_TASKS_KEY, [
+        { id: 1, title: 'UI评审会议准备', project: '凤凰项目', priority: '高优先级', priorityClass: 'text-red-500', dueDate: '明天', assignee: { name: '李明', avatarChar: 'L', avatarColor: 'FFC107' }, completed: false },
+        { id: 2, title: '周报提交', project: '内部事务', priority: '中优先级', priorityClass: 'text-yellow-500', dueDate: '今天', assignee: { name: '我', avatarChar: 'U', avatarColor: '667EEA' }, completed: false },
+      ]);
+      recentActivities.value = loadFromLocalStorage(LOCAL_STORAGE_ACTIVITIES_KEY, [
+        { id: Date.now(), icon: 'fas fa-info-circle', iconBg: 'bg-blue-100', iconColor: 'text-blue-600', textParts: [{ type: 'normal', content: '欢迎使用仪表盘！数据将保存在本地。' }], time: '刚刚' },
+      ]);
+      mockNotifications.value = loadFromLocalStorage(LOCAL_STORAGE_NOTIFICATIONS_KEY, [
+        { id: 1, text: '新任务 "部署生产环境" 已分配给您。', time: '10分钟前', read: false },
+        { id: 2, text: '项目 "凤凰项目" 即将到期。', time: '1小时前', read: true },
+      ]);
+
+      dashboardStats.value = [
+        { id: 1, title: '活跃项目', value: '3', icon: 'fas fa-folder-open', trend: '+1 新增', trendColor: 'text-green-500',bgColor: 'bg-blue-100', iconColor: 'text-blue-600' },
+        { id: 2, title: '今日到期任务', value: userTasks.value.filter(t => (t.dueDate === '今天' || t.dueDate === '明天') && !t.completed).length.toString(), icon: 'fas fa-calendar-check', trend: '紧急!', trendColor: 'text-red-500', bgColor: 'bg-yellow-100', iconColor: 'text-yellow-600' },
+        { id: 3, title: '已完成任务', value: userTasks.value.filter(t => t.completed).length.toString(), icon: 'fas fa-check-double', bgColor: 'bg-green-100', iconColor: 'text-green-600' },
+        { id: 4, title: '团队成员', value: '12', icon: 'fas fa-users', avatars: ['A', 'B', 'C'], bgColor: 'bg-purple-100', iconColor: 'text-purple-600' }
+      ];
+      projectProgressData.value = [
+        { id: 1, name: '凤凰项目 - UI/UX', progress: 75, color: 'bg-indigo-600' },
+        { id: 2, name: '北极星计划 - 后端开发', progress: 90, color: 'bg-green-600' },
+      ];
+      isLoading.value = false;
     };
 
-    // --- 事件处理方法 ---
     const toggleSidebar = () => isSidebarOpen.value = !isSidebarOpen.value;
     const closeSidebar = () => {
-      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-        isSidebarOpen.value = false;
-      }
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) isSidebarOpen.value = false;
     };
-
     const handleNavigation = (viewName) => {
       currentView.value = viewName;
-      console.log(`导航到: ${viewName}`);
       closeSidebar(); 
     };
 
-    const openAddTaskModal = () => showAddTaskModal.value = true;
-    const closeAddTaskModal = () => showAddTaskModal.value = false;
+    const openTaskModalForAdd = () => {
+      editingTask.value = null; // 清空编辑任务，表示是添加模式
+      showTaskModal.value = true;
+    };
+    const openTaskModalForEdit = (task) => {
+      editingTask.value = JSON.parse(JSON.stringify(task)); // 深拷贝任务对象以进行编辑
+      showTaskModal.value = true;
+    };
+    const closeTaskModal = () => showTaskModal.value = false;
 
-    // 处理保存新任务
-    const handleSaveNewTask = async (newTaskData) => {
-      isLoading.value = true; // 显示加载状态
-      closeAddTaskModal();
-      console.log("正在添加新任务...");
-      await new Promise(resolve => setTimeout(resolve, 300)); // 模拟网络延迟
+    const handleSaveTask = async (taskData) => {
+      isLoading.value = true;
+      closeTaskModal();
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      const newTask = { 
-        id: Date.now(), 
-        assignee: { name: '我', avatarChar: 'U', avatarColor: '667EEA' }, 
-        completed: false,
-        dueDate: '待定', 
-        ...newTaskData 
-      };
-      userTasks.value.unshift(newTask); 
-      saveTasksToLocalStorage(); // 保存到 localStorage
-      addActivity('fas fa-plus-circle', 'bg-green-100', 'text-green-600', [
-        { type: 'normal', content: '添加了新任务 ' },
-        { type: 'bold', content: `"${newTask.title}"` }
-      ]);
-      console.log("新任务已添加:", newTask);
-      isLoading.value = false; // 隐藏加载状态
+      if (taskData.id) { // 编辑模式
+        const taskIndex = userTasks.value.findIndex(t => t.id === taskData.id);
+        if (taskIndex !== -1) {
+          userTasks.value.splice(taskIndex, 1, { ...userTasks.value[taskIndex], ...taskData });
+          addActivity('fas fa-edit', 'bg-yellow-100', 'text-yellow-600', [
+            { type: 'normal', content: '编辑了任务 ' }, { type: 'bold', content: `"${taskData.title}"` }
+          ]);
+        }
+      } else { // 添加模式
+        const newTask = { 
+          id: Date.now(), 
+          assignee: { name: '我', avatarChar: 'U', avatarColor: '667EEA' }, 
+          completed: false,
+          ...taskData 
+        };
+        userTasks.value.unshift(newTask); 
+        addActivity('fas fa-plus-circle', 'bg-green-100', 'text-green-600', [
+          { type: 'normal', content: '添加了新任务 ' }, { type: 'bold', content: `"${newTask.title}"` }
+        ]);
+      }
+      saveToLocalStorage(LOCAL_STORAGE_TASKS_KEY, userTasks.value);
+      isLoading.value = false;
     };
 
-    // 处理切换任务完成状态
     const handleToggleTask = async (taskId) => {
       isLoading.value = true;
-      console.log(`正在切换任务 ${taskId} 的状态...`);
       await new Promise(resolve => setTimeout(resolve, 200)); 
-
-      const taskIndex = userTasks.value.findIndex(t => t.id === taskId);
-      if (taskIndex !== -1) {
-        const task = userTasks.value[taskIndex];
+      const task = userTasks.value.find(t => t.id === taskId);
+      if (task) {
         task.completed = !task.completed;
-        saveTasksToLocalStorage();
+        saveToLocalStorage(LOCAL_STORAGE_TASKS_KEY, userTasks.value);
         addActivity(
           task.completed ? 'fas fa-check-circle' : 'fas fa-undo', 
           task.completed ? 'bg-green-100' : 'bg-yellow-100', 
           task.completed ? 'text-green-600' : 'text-yellow-600', 
-          [
-            { type: 'normal', content: `任务 "${task.title}" 被标记为 ` },
-            { type: 'bold', content: task.completed ? '已完成' : '未完成' }
-          ]
+          [{ type: 'normal', content: `任务 "${task.title}" 被标记为 ` }, { type: 'bold', content: task.completed ? '已完成' : '未完成' }]
         );
-        console.log(`任务 ${taskId} 状态已切换为: ${task.completed}`);
       }
       isLoading.value = false;
     };
     
-    // 处理删除任务请求
     const handleDeleteTask = async (taskId) => {
-       // 可以添加一个确认步骤
-       if (typeof confirm !== 'undefined' && !confirm('确定要删除这个任务吗？')) {
-         return;
-       }
-       
+       if (typeof confirm !== 'undefined' && !confirm('确定要删除这个任务吗？')) return;
        isLoading.value = true;
-       console.log(`正在删除任务 ${taskId}...`);
        await new Promise(resolve => setTimeout(resolve, 300));
-
        const taskIndex = userTasks.value.findIndex(t => t.id === taskId);
        if (taskIndex !== -1) {
          const deletedTask = userTasks.value[taskIndex];
-         userTasks.value.splice(taskIndex, 1); // 从数组中移除
-         saveTasksToLocalStorage();
+         userTasks.value.splice(taskIndex, 1);
+         saveToLocalStorage(LOCAL_STORAGE_TASKS_KEY, userTasks.value);
          addActivity('fas fa-trash-alt', 'bg-red-100', 'text-red-600', [
-           { type: 'normal', content: '删除了任务 ' },
-           { type: 'bold', content: `"${deletedTask.title}"` }
+           { type: 'normal', content: '删除了任务 ' }, { type: 'bold', content: `"${deletedTask.title}"` }
          ]);
-         console.log(`任务 ${taskId} 已删除。`);
        }
        isLoading.value = false;
     };
     
-    const performSearch = (term) => {
-      searchTerm.value = term;
+    const performSearch = (term) => searchTerm.value = term;
+
+    const toggleNotificationPanel = () => showNotificationPanel.value = !showNotificationPanel.value;
+    const closeNotificationPanel = () => showNotificationPanel.value = false;
+
+    const handleNotificationRead = (notificationId) => {
+      const notification = mockNotifications.value.find(n => n.id === notificationId);
+      if (notification && !notification.read) {
+        notification.read = true;
+        saveToLocalStorage(LOCAL_STORAGE_NOTIFICATIONS_KEY, mockNotifications.value);
+      }
+    };
+    
+    const handleStatCardClick = (statTitle) => {
+        if (statTitle === '活跃项目') {
+            handleNavigation('项目');
+        }
+        // 可以为其他卡片添加类似逻辑
+        console.log(`统计卡片 "${statTitle}" 被点击。`);
     };
 
-    const toggleNotificationPanel = () => {
-      showNotificationPanel.value = !showNotificationPanel.value;
-    };
-    const closeNotificationPanel = () => {
-      showNotificationPanel.value = false;
-    };
-
-    // 处理点击外部关闭侧边栏 (移动端)
     const handleClickOutsideSidebar = (event) => {
       if (typeof window !== 'undefined' && isSidebarOpen.value && window.innerWidth < 1024) {
         const sidebarEl = document.getElementById('sidebar');
@@ -318,9 +321,8 @@ export default defineComponent({
       }
     };
 
-    // --- 生命周期钩子 ---
     onMounted(() => {
-      fetchData(); // 组件挂载后加载初始数据
+      fetchData();
       if (typeof document !== 'undefined') {
         document.addEventListener('click', handleClickOutsideSidebar);
       }
@@ -332,37 +334,17 @@ export default defineComponent({
     });
 
     return {
-      isSidebarOpen,
-      toggleSidebar,
-      closeSidebar,
-      userName,
-      currentView,
-      currentViewTitle,
-      handleNavigation,
-      dashboardStats,
-      userTasks, 
-      projectProgressData,
-      recentActivities,
-      showAddTaskModal,
-      openAddTaskModal,
-      closeAddTaskModal,
-      handleSaveNewTask, // 修改为 handleSaveNewTask
-      handleToggleTask, // 修改为 handleToggleTask
-      handleDeleteTask, // 新增删除处理函数
-      performSearch,
-      filteredTasks,
-      showNotificationPanel,
-      toggleNotificationPanel,
-      closeNotificationPanel,
-      mockNotifications,
-      isLoading, // 暴露加载状态
+      isSidebarOpen, toggleSidebar, closeSidebar, userName, currentView, currentViewTitle, handleNavigation,
+      dashboardStats, userTasks, projectProgressData, recentActivities, showTaskModal, editingTask,
+      openTaskModalForAdd, openTaskModalForEdit, closeTaskModal, handleSaveTask, handleToggleTask, handleDeleteTask,
+      performSearch, filteredTasks, showNotificationPanel, toggleNotificationPanel, closeNotificationPanel,
+      mockNotifications, isLoading, handleNotificationRead, handleStatCardClick,
     };
   },
 });
 </script>
 
 <style>
-/* 全局样式 */
 .sidebar-transition {
   transition: transform 0.3s ease-in-out;
 }
