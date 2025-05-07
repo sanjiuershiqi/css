@@ -8,9 +8,10 @@
 
     <div class="flex-1 flex flex-col overflow-auto">
       <Header 
-        @toggle-sidebar="toggleSidebar"
+        :user-profile="userProfile" :unread-notifications-count="unreadNotificationsCount" @toggle-sidebar="toggleSidebar"
         @search="performSearch" 
         @toggle-notifications="toggleNotificationPanel"
+        @navigate-to-settings="navigateToSettingsFromHeader"
       />
 
       <main class="flex-1 p-6 md:p-8 space-y-8">
@@ -20,8 +21,7 @@
         </div>
         
         <template v-else>
-          <section>
-            <h2 class="text-3xl font-semibold text-gray-800 mb-2">早上好, {{ userName }}!</h2>
+          <section v-if="currentView !== '设置'"> <h2 class="text-3xl font-semibold text-gray-800 mb-2">早上好, {{ userProfile.userName }}!</h2>
             <p class="text-gray-600 mb-6">您当前正在查看: <span class="font-semibold text-indigo-600">{{ currentViewTitle }}</span></p>
           </section>
 
@@ -82,6 +82,13 @@
             </section>
           </template>
 
+          <template v-else-if="currentView === '设置'">
+            <SettingsView 
+              :current-profile="userProfile"
+              :current-settings="userSettings"
+              @save-settings="handleSaveUserSettings" />
+          </template>
+
           <template v-else>
             <section class="bg-white p-6 rounded-xl shadow-lg">
               <h3 class="text-2xl font-semibold text-gray-800 mb-4">{{ currentViewTitle }}</h3>
@@ -118,7 +125,11 @@ import ProjectProgressList from './components/ProjectProgressList.vue';
 import RecentActivity from './components/RecentActivity.vue';
 import TaskFormModal from './components/TaskFormModal.vue';
 import NotificationPanel from './components/NotificationPanel.vue';
+import SettingsView from './components/SettingsView.vue'; // 引入设置组件
 
+// localStorage Keys
+const LOCAL_STORAGE_USER_PROFILE_KEY = 'vue2-dashboard-user-profile-v1';
+const LOCAL_STORAGE_USER_SETTINGS_KEY = 'vue2-dashboard-user-settings-v1';
 const LOCAL_STORAGE_TASKS_KEY = 'vue2-dashboard-tasks-v2';
 const LOCAL_STORAGE_ACTIVITIES_KEY = 'vue2-dashboard-activities-v2';
 const LOCAL_STORAGE_NOTIFICATIONS_KEY = 'vue2-dashboard-notifications-v2';
@@ -126,11 +137,10 @@ const LOCAL_STORAGE_NOTIFICATIONS_KEY = 'vue2-dashboard-notifications-v2';
 export default defineComponent({
   name: 'App',
   components: {
-    Sidebar, Header, StatsGrid, MyTasks, ProjectProgressList, RecentActivity, TaskFormModal, NotificationPanel,
+    Sidebar, Header, StatsGrid, MyTasks, ProjectProgressList, RecentActivity, TaskFormModal, NotificationPanel, SettingsView,
   },
   setup() {
     const isSidebarOpen = ref(false);
-    const userName = ref('尊贵的用户');
     const currentView = ref('仪表盘'); 
     const isLoading = ref(true);
     
@@ -139,6 +149,10 @@ export default defineComponent({
     const showNotificationPanel = ref(false);
     const searchTerm = ref('');
 
+    // 用户配置和应用设置
+    const userProfile = ref({ userName: '用户', avatarChar: 'U', avatarColor: '#6366F1' }); // 默认 indigo-500
+    const userSettings = ref({ darkMode: false });
+
     const dashboardStats = ref([]);
     const userTasks = ref([]);
     const projectProgressData = ref([]);
@@ -146,23 +160,22 @@ export default defineComponent({
     const mockNotifications = ref([]);
 
     const currentViewTitle = computed(() => currentView.value);
+    
+    const unreadNotificationsCount = computed(() => {
+      return Array.isArray(mockNotifications.value) ? mockNotifications.value.filter(n => !n.read).length : 0;
+    });
 
     const filteredTasks = computed(() => {
-      // 确保在访问 userTasks.value 前它是已定义的数组
       const tasksSource = Array.isArray(userTasks.value) ? userTasks.value : [];
-      
       let tasksToFilter;
       if (currentView.value === '我的任务') {
         tasksToFilter = tasksSource;
       } else if (currentView.value === '仪表盘') {
         tasksToFilter = tasksSource.filter(t => !t.completed);
       } else {
-        return []; // 其他视图不显示任务列表或不过滤
+        return [];
       }
-
-      if (!searchTerm.value) {
-        return tasksToFilter;
-      }
+      if (!searchTerm.value) return tasksToFilter;
       const lowerSearchTerm = searchTerm.value.toLowerCase();
       return tasksToFilter.filter(task => 
         (task.title && task.title.toLowerCase().includes(lowerSearchTerm)) ||
@@ -175,10 +188,7 @@ export default defineComponent({
         const stored = localStorage.getItem(key);
         try {
           if (stored) return JSON.parse(stored);
-        } catch (e) {
-          console.error(`Error parsing localStorage key "${key}":`, e);
-          localStorage.removeItem(key); // 清除损坏的数据
-        }
+        } catch (e) { console.error(`Error parsing localStorage key "${key}":`, e); localStorage.removeItem(key); }
       }
       return defaultValue;
     };
@@ -186,14 +196,9 @@ export default defineComponent({
     const saveToLocalStorage = (key, data, maxItems = null) => {
       if (typeof localStorage !== 'undefined') {
         let dataToSave = data;
-        if (maxItems && Array.isArray(data) && data.length > maxItems) {
-          dataToSave = data.slice(0, maxItems);
-        }
-        try {
-          localStorage.setItem(key, JSON.stringify(dataToSave));
-        } catch (e) {
-          console.error(`Error saving to localStorage key "${key}":`, e);
-        }
+        if (maxItems && Array.isArray(data) && data.length > maxItems) dataToSave = data.slice(0, maxItems);
+        try { localStorage.setItem(key, JSON.stringify(dataToSave)); } 
+        catch (e) { console.error(`Error saving to localStorage key "${key}":`, e); }
       }
     };
 
@@ -206,11 +211,13 @@ export default defineComponent({
     
     const fetchData = async () => {
       isLoading.value = true;
-      await new Promise(resolve => setTimeout(resolve, 300)); // 缩短延迟以便更快看到结果
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      userProfile.value = loadFromLocalStorage(LOCAL_STORAGE_USER_PROFILE_KEY, { userName: '访客', avatarChar: 'V', avatarColor: '#A0AEC0' });
+      userSettings.value = loadFromLocalStorage(LOCAL_STORAGE_USER_SETTINGS_KEY, { darkMode: false });
 
       userTasks.value = loadFromLocalStorage(LOCAL_STORAGE_TASKS_KEY, [
         { id: 1, title: 'UI评审会议准备', project: '凤凰项目', priority: '高优先级', priorityClass: 'text-red-500', dueDate: '明天', assignee: { name: '李明', avatarChar: 'L', avatarColor: 'FFC107' }, completed: false },
-        { id: 2, title: '周报提交', project: '内部事务', priority: '中优先级', priorityClass: 'text-yellow-500', dueDate: '今天', assignee: { name: '我', avatarChar: 'U', avatarColor: '667EEA' }, completed: false },
       ]);
       recentActivities.value = loadFromLocalStorage(LOCAL_STORAGE_ACTIVITIES_KEY, [
         { id: Date.now() + 1, icon: 'fas fa-info-circle', iconBg: 'bg-blue-100', iconColor: 'text-blue-600', textParts: [{ type: 'normal', content: '欢迎使用仪表盘！数据将保存在本地。' }], time: '刚刚' },
@@ -242,10 +249,12 @@ export default defineComponent({
     };
     const handleNavigation = (viewName) => {
       currentView.value = viewName;
-      // isLoading.value = true; // 可以选择在切换视图时也显示加载状态
-      // setTimeout(() => isLoading.value = false, 100); // 模拟加载
       closeSidebar(); 
     };
+    const navigateToSettingsFromHeader = () => {
+        handleNavigation('设置');
+    };
+
 
     const openTaskModalForAdd = () => {
       editingTask.value = null; 
@@ -266,7 +275,15 @@ export default defineComponent({
         const taskIndex = userTasks.value.findIndex(t => t.id === taskData.id);
         if (taskIndex !== -1) {
           const oldTask = userTasks.value[taskIndex];
-          userTasks.value.splice(taskIndex, 1, { ...oldTask, ...taskData }); // 保留 completed 和 assignee
+          // 保留原有的 completed 和 assignee 状态，只更新表单字段
+          userTasks.value.splice(taskIndex, 1, { 
+            ...oldTask, 
+            title: taskData.title,
+            project: taskData.project,
+            priority: taskData.priority,
+            priorityClass: taskData.priorityClass,
+            dueDate: taskData.dueDate
+          });
           addActivity('fas fa-edit', 'bg-yellow-100', 'text-yellow-600', [
             { type: 'normal', content: '编辑了任务 ' }, { type: 'bold', content: `"${taskData.title}"` }
           ]);
@@ -274,7 +291,11 @@ export default defineComponent({
       } else { 
         const newTask = { 
           id: Date.now(), 
-          assignee: { name: '我', avatarChar: 'U', avatarColor: '667EEA' }, 
+          assignee: { // 新任务默认分配给当前用户
+            name: userProfile.value.userName, 
+            avatarChar: userProfile.value.avatarChar, 
+            avatarColor: userProfile.value.avatarColor 
+          }, 
           completed: false,
           ...taskData 
         };
@@ -284,8 +305,7 @@ export default defineComponent({
         ]);
       }
       saveToLocalStorage(LOCAL_STORAGE_TASKS_KEY, userTasks.value);
-      fetchData(); // 重新加载数据以更新统计卡片等
-      // isLoading.value = false; // fetchData 会处理
+      await fetchData(); // 重新加载数据以更新统计卡片等
     };
 
     const handleToggleTask = async (taskId) => {
@@ -302,8 +322,7 @@ export default defineComponent({
           [{ type: 'normal', content: `任务 "${task.title}" 被标记为 ` }, { type: 'bold', content: task.completed ? '已完成' : '未完成' }]
         );
       }
-      fetchData(); // 重新加载数据以更新统计卡片等
-      // isLoading.value = false; // fetchData 会处理
+      await fetchData();
     };
     
     const handleDeleteTask = async (taskId) => {
@@ -319,8 +338,7 @@ export default defineComponent({
            { type: 'normal', content: '删除了任务 ' }, { type: 'bold', content: `"${deletedTask.title}"` }
          ]);
        }
-       fetchData(); // 重新加载数据以更新统计卡片等
-       // isLoading.value = false; // fetchData 会处理
+       await fetchData();
     };
     
     const performSearch = (term) => searchTerm.value = term;
@@ -333,14 +351,33 @@ export default defineComponent({
       if (notification && !notification.read) {
         notification.read = true;
         saveToLocalStorage(LOCAL_STORAGE_NOTIFICATIONS_KEY, mockNotifications.value);
+        // 可以在这里重新计算 unreadNotificationsCount，或者让 computed 属性自动更新
       }
     };
     
-    const handleStatCardClick = (stat) => { // 接收整个 stat 对象
+    const handleStatCardClick = (stat) => {
         if (stat.title === '活跃项目') {
             handleNavigation('项目');
         }
         console.log(`统计卡片 "${stat.title}" 被点击。`);
+    };
+
+    // 处理用户设置保存
+    const handleSaveUserSettings = async (newSettingsData) => {
+        isLoading.value = true;
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        userProfile.value = { ...userProfile.value, ...newSettingsData.profile };
+        userSettings.value = { ...userSettings.value, ...newSettingsData.settings };
+
+        saveToLocalStorage(LOCAL_STORAGE_USER_PROFILE_KEY, userProfile.value);
+        saveToLocalStorage(LOCAL_STORAGE_USER_SETTINGS_KEY, userSettings.value);
+
+        addActivity('fas fa-user-cog', 'bg-blue-100', 'text-blue-600', [
+            { type: 'normal', content: '用户设置已更新。' }
+        ]);
+        console.log('用户设置已保存:', userProfile.value, userSettings.value);
+        await fetchData(); // 重新加载数据，确保依赖用户配置的部分（如头像）更新
     };
 
     const handleClickOutsideSidebar = (event) => {
@@ -366,11 +403,12 @@ export default defineComponent({
     });
 
     return {
-      isSidebarOpen, toggleSidebar, closeSidebar, userName, currentView, currentViewTitle, handleNavigation,
+      isSidebarOpen, toggleSidebar, closeSidebar, userProfile, currentView, currentViewTitle, handleNavigation,
       dashboardStats, userTasks, projectProgressData, recentActivities, showTaskModal, editingTask,
       openTaskModalForAdd, openTaskModalForEdit, closeTaskModal, handleSaveTask, handleToggleTask, handleDeleteTask,
       performSearch, filteredTasks, showNotificationPanel, toggleNotificationPanel, closeNotificationPanel,
-      mockNotifications, isLoading, handleNotificationRead, handleStatCardClick,
+      mockNotifications, isLoading, handleNotificationRead, handleStatCardClick, userSettings, handleSaveUserSettings,
+      unreadNotificationsCount, navigateToSettingsFromHeader,
     };
   },
 });
@@ -380,4 +418,9 @@ export default defineComponent({
 .sidebar-transition {
   transition: transform 0.3s ease-in-out;
 }
+/* 可以添加一个简单的暗黑模式基础样式，如果用户启用了 */
+/* body.dark-mode { background-color: #1a202c; color: #e2e8f0; } */
+/* body.dark-mode .bg-white { background-color: #2d3748; } */
+/* body.dark-mode .text-gray-800 { color: #f7fafc; } */
+/* ... 更多暗黑模式样式 */
 </style>
