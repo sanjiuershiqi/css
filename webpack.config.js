@@ -6,97 +6,110 @@ const HtmlWebpackPlugin = require('html-webpack-plugin'); // 用于生成 HTML �
 const { DefinePlugin } = require('webpack'); // 用于定义全局常量
 
 module.exports = (env, argv) => {
+  // 判断当前是生产模式还是开发模式
   const isProduction = argv.mode === 'production';
 
   return {
-    mode: isProduction ? 'production' : 'development', // 设置模式
-    
-    // 入口文件 - 这是关键的修改点
-    entry: './src/main.js', // 确保指向您的 Vue 应用入口文件
+    mode: isProduction ? 'production' : 'development', // 设置 Webpack 模式
 
-    // 输出配置
+    // --- 入口文件 ---
+    // 这是您 Vue 应用的主 JavaScript 文件
+    entry: './src/main.js', 
+
+    // --- 输出配置 ---
     output: {
-      path: path.resolve(__dirname, 'dist'), // 打包后文件的输出目录
-      filename: isProduction ? 'js/[name].[contenthash:8].js' : 'js/[name].bundle.js', // 打包后 JS 文件名
+      path: path.resolve(__dirname, 'dist'), // 打包后文件的存放目录
+      // 根据模式生成不同的文件名，生产环境通常包含内容哈希以利于缓存控制
+      filename: isProduction ? 'js/[name].[contenthash:8].js' : 'js/[name].bundle.js', 
       chunkFilename: isProduction ? 'js/[name].[contenthash:8].chunk.js' : 'js/[name].chunk.js',
-      publicPath: '/', // 部署应用包时的基本 URL
-      clean: true, // 在生成文件之前清空 output 目录
+      publicPath: '/', // 部署应用时的基础 URL
+      clean: true, // 在每次构建前清理 /dist 文件夹
     },
 
-    // 开发服务器配置 (如果您的模板使用 webpack-dev-server)
+    // --- 开发服务器配置 (仅在本地开发时使用) ---
     devServer: {
       static: {
-        directory: path.join(__dirname, 'public'), // 静态文件目录
+        directory: path.join(__dirname, 'public'), // 告知服务器从哪个目录提供静态文件
       },
       compress: true, // 启用 gzip 压缩
-      port: 8080, // 开发服务器端口
-      hot: true, // 启用热模块替换 (HMR)
-      historyApiFallback: true, // 对于单页应用，所有路由都指向 index.html
-      open: true, // 自动打开浏览器
+      port: 8080, // 开发服务器监听的端口
+      hot: true, // 启用模块热替换 (HMR)
+      historyApiFallback: true, // 对于单页应用，任何 404 响应都应服务于 index.html
+      open: false, // 是否在启动后自动打开浏览器 (可以设为 true)
     },
 
-    // 模块解析配置
+    // --- 模块解析配置 ---
     resolve: {
-      extensions: ['.js', '.vue', '.json'], // 自动解析确定的扩展名
+      // 尝试按顺序自动解析这些扩展名
+      extensions: ['.js', '.vue', '.json'], 
       alias: {
-        // 创建 import 或 require 的别名，来确保模块引入变得更简单
-        '@': path.resolve(__dirname, 'src/'),
-        'vue$': 'vue/dist/vue.esm.js' // 确保使用的是包含编译器的 Vue 版本 (对于 Vue 2 很重要)
+        // 创建 import 或 require 的别名
+        '@': path.resolve(__dirname, 'src/'), // '@' 通常指向 'src' 目录
+        // 确保使用的是包含模板编译器的 Vue 构建版本 (对 Vue 2 很重要)
+        'vue$': 'vue/dist/vue.esm.js' 
       }
     },
 
-    // 模块加载器配置
+    // --- 模块加载器 (Loaders) 配置 ---
     module: {
       rules: [
+        // 处理 .vue 文件
         {
-          test: /\.vue$/, // 匹配 .vue 文件
-          loader: 'vue-loader' // 使用 vue-loader 处理
+          test: /\.vue$/,
+          loader: 'vue-loader' 
         },
+        // 处理 .js 文件 (使用 Babel 转译)
         {
-          test: /\.js$/, // 匹配 .js 文件
-          exclude: /node_modules/, // 排除 node_modules 目录
+          test: /\.js$/,
+          exclude: /node_modules/, // 排除 node_modules 中的 JS 文件
           use: {
-            loader: 'babel-loader', // 使用 babel-loader (需要 .babelrc 或 babel.config.js 配置文件)
+            loader: 'babel-loader', // 需要配合 @babel/core, @babel/preset-env 和 babel 配置文件
             options: {
-              cacheDirectory: true, // 启用缓存以提高性能
+              cacheDirectory: true, // 启用缓存，提高后续构建速度
             }
           }
         },
+        // 处理 .css 文件
         {
-          test: /\.css$/, // 匹配 .css 文件
+          test: /\.css$/,
           use: [
-            'vue-style-loader', // 或 'style-loader' (取决于您的需求和 Vue 版本)
-            'css-loader',
-            'postcss-loader' // (可选, 如果您使用 PostCSS 处理 CSS，例如 Autoprefixer 或 Tailwind CSS)
+            'vue-style-loader', // 将 CSS 注入到 Vue 组件的 <style> 标签中
+            'css-loader',       // 解析 CSS 文件中的 @import 和 url()
+            'postcss-loader'    // (可选) 使用 PostCSS 处理 CSS (需要 postcss.config.js)
           ]
         },
+        // 处理 .scss 或 .sass 文件
         {
-          test: /\.s[ac]ss$/i, // 匹配 .scss 或 .sass 文件
+          test: /\.s[ac]ss$/i,
           use: [
             'vue-style-loader',
             'css-loader',
             'postcss-loader', // 可选
-            'sass-loader',
+            'sass-loader',    // 将 Sass/SCSS 编译成 CSS (需要 sass 或 node-sass)
           ],
         },
+        // 处理 .less 文件
         {
-          test: /\.less$/, // 匹配 .less 文件
+          test: /\.less$/,
           use: [
             'vue-style-loader',
             'css-loader',
             'postcss-loader', // 可选
-            'less-loader',
+            'less-loader',    // 将 Less 编译成 CSS (需要 less)
           ],
         },
+        // 处理图片文件 (使用 Webpack 5 内置的 Asset Modules)
         {
-          test: /\.(png|jpe?g|gif|svg|webp|ico)$/i, // 匹配图片文件
-          type: 'asset/resource', // Webpack 5 的资源模块
+          test: /\.(png|jpe?g|gif|svg|webp|ico)$/i,
+          type: 'asset/resource', // 将文件发送到输出目录并导出 URL
           generator: {
-            filename: 'img/[name].[hash:8][ext][query]'
+            // 定义输出的文件名格式
+            filename: 'img/[name].[hash:8][ext][query]' 
           }
         },
+        // 处理字体文件 (使用 Webpack 5 内置的 Asset Modules)
         {
-          test: /\.(woff2?|eot|ttf|otf)$/i, // 匹配字体文件
+          test: /\.(woff2?|eot|ttf|otf)$/i,
           type: 'asset/resource',
           generator: {
             filename: 'fonts/[name].[hash:8][ext][query]'
@@ -105,39 +118,48 @@ module.exports = (env, argv) => {
       ]
     },
 
-    // 插件配置
+    // --- 插件 (Plugins) 配置 ---
     plugins: [
-      new VueLoaderPlugin(), // Vue Loader 的插件，它的职责是将你定义过的其它规则复制并应用到 .vue 文件里相应语言的块
+      // Vue Loader 必需的插件
+      new VueLoaderPlugin(), 
+      
+      // 自动生成 HTML 文件，并注入打包后的资源
       new HtmlWebpackPlugin({
-        template: './public/index.html', // 指定 HTML 模板文件路径
-        filename: 'index.html', // 生成的 HTML 文件名
-        inject: true, // 自动将所有产出注入到给定的 template 或 templateContent
-        title: 'Vue 2 Dashboard App', // 可以传递给模板的变量
-        favicon: './public/favicon.ico' // (可选, 如果您有 favicon)
+        template: './public/index.html', // 指定 HTML 模板文件
+        filename: 'index.html',         // 生成的 HTML 文件名
+        inject: true,                   // 自动注入所有资源
+        title: 'Vue 2 Dashboard App',   // 可传递给模板的标题变量
+        // favicon: './public/favicon.ico' // <--- 这一行已被移除
       }),
-      new DefinePlugin({ // 定义全局常量，在 Vue 代码中可以直接访问
-        'process.env.BASE_URL': JSON.stringify(process.env.BASE_URL || '/')
+      
+      // 定义可以在代码中访问的全局常量
+      new DefinePlugin({
+        // 定义 process.env.BASE_URL，通常用于 publicPath
+        'process.env.BASE_URL': JSON.stringify(process.env.BASE_URL || '/') 
       })
+      // 根据需要添加其他插件，例如 MiniCssExtractPlugin, CopyWebpackPlugin 等
     ],
 
-    // 优化配置 (例如代码分割)
+    // --- 优化 (Optimization) 配置 ---
     optimization: {
       splitChunks: {
-        chunks: 'all', // 对所有类型的 chunks 进行代码分割 (initial, async)
+        chunks: 'all', // 对所有类型的 chunk 进行代码分割
       },
-      runtimeChunk: 'single', // 为运行时代码创建一个单独的 chunk
+      runtimeChunk: 'single', // 为 Webpack 运行时代码创建一个单独的 chunk
     },
 
-    // Source Map 配置 (用于调试)
-    devtool: isProduction ? false : 'eval-cheap-module-source-map',
+    // --- Source Map 配置 ---
+    // 控制是否生成，以及如何生成 source map，用于调试
+    devtool: isProduction ? false : 'eval-cheap-module-source-map', // 生产环境通常不生成或生成单独文件，开发环境使用较快的类型
 
-    // 性能提示配置
+    // --- 性能提示配置 ---
     performance: {
-      hints: isProduction ? 'warning' : false, // 在生产环境中，当 bundle 大小超过限制时显示警告
+      // 在生产环境中，如果资源超过一定大小，给出警告
+      hints: isProduction ? 'warning' : false, 
     },
 
-    // 禁用 Node.js 核心模块的 polyfills (Webpack 5 默认行为)
-    // 如果您的代码或依赖项依赖这些模块，可能需要手动提供 polyfills
+    // --- Node.js Polyfills ---
+    // Webpack 5 不再默认提供 Node.js 核心模块的 polyfills
     node: false, 
   };
 };
