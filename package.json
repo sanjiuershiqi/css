@@ -1,34 +1,44 @@
 {
-  "name": "tpl-vue-pro",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "name": "tpl-vue-pro",  // 您的项目名称，请根据实际情况修改
+  "version": "1.0.0",     // 您的项目版本
+  "private": true,        // 如果是私有项目
   "scripts": {
-    "clean": "rm dist/bundle.js",
-    "install-dep": "npm i --no-bin-links",
-    "build": "webpack",
-    "build-prod": "webpack --mode production",
-    "start": "webpack-dev-server --hot"
+    "serve": "webpack-dev-server --config webpack.config.js --mode development", // 假设您有开发服务器脚本
+    "build": "webpack --config webpack.config.js --mode production", // 确保构建脚本明确使用配置文件和模式
+    "lint": "eslint --ext .js,.vue src" // 示例 lint 脚本
   },
   "dependencies": {
-    "@vue/composition-api": "^1.7.2",
-    "vue": "2.6.14"
+    "@vue/composition-api": "^1.7.2", // 您之前安装的
+    "vue": "^2.6.14" // Vue 2 核心
+    // 这里是您应用运行所必需的其他依赖
   },
   "devDependencies": {
-    "@babel/core": "7.22.20",
-    "@babel/preset-env": "7.22.20",
-    "@babel/preset-react": "7.22.15",
-    "babel-loader": "9.1.3",
-    "css-loader": "6.5.1",
-    "file-loader": "6.2.0",
-    "vue-loader": "15.9.8",
-    "vue-style-loader": "4.1.2",
-    "vue-template-compiler": "2.6.14",
-    "webpack": "5.88.2",
-    "webpack-cli": "5.1.4",
-    "webpack-dev-server": "4.15.1"
-  }
+    "@babel/core": "^7.20.0", // Babel 核心
+    "@babel/preset-env": "^7.20.0", // Babel 预设
+    "babel-loader": "^9.0.0", // Webpack 的 Babel 加载器
+    "css-loader": "^6.7.0", // 处理 CSS 文件中的 @import 和 url()
+    "file-loader": "^6.2.0", // 处理文件（如图片、字体）(Webpack 4/5 推荐 asset modules)
+    "html-webpack-plugin": "^5.5.0", // <--- 确保这个被添加
+    "less": "^4.1.0", // 如果您使用 Less
+    "less-loader": "^11.0.0", // Webpack 的 Less 加载器
+    "mini-css-extract-plugin": "^2.7.0", // (可选) 将 CSS 提取到单独的文件
+    "node-sass": "^8.0.0", // 如果您使用 Sass (dart-sass 更推荐)
+    "postcss-loader": "^7.0.0", // Webpack 的 PostCSS 加载器
+    "postcss-preset-env": "^8.0.0", // (可选) PostCSS 预设
+    "sass-loader": "^13.0.0", // Webpack 的 Sass 加载器
+    "style-loader": "^3.3.0", // 将 CSS 注入到 DOM 中 (通常与 vue-style-loader 配合或替代)
+    "vue-loader": "^15.10.0", // Webpack 的 Vue 单文件组件加载器 (Vue 2 版本)
+    "vue-style-loader": "^4.1.0", // 类似于 style-loader，但为 Vue SSR 和 CSS 提取做了优化
+    "vue-template-compiler": "^2.6.14", // Vue 模板编译器 (版本需与 vue 匹配)
+    "webpack": "^5.88.0", // Webpack 核心
+    "webpack-cli": "^5.1.0", // Webpack 命令行工具
+    "webpack-dev-server": "^4.15.0" // Webpack 开发服务器 (可选，用于本地开发)
+    // 根据您的 webpack.config.js 添加其他必要的加载器和插件
+    // 例如: 'terser-webpack-plugin' (用于压缩JS), 'copy-webpack-plugin' (用于复制静态文件)
+  },
+  "browserslist": [ // (可选) Babel 和 Autoprefixer 会使用这个列表
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
 }
