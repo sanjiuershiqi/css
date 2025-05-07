@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Vue 2 仪表盘 - ProManage</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+      /* 全局基础样式 */
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f7f8fc; /* 整个页面的浅灰色背景 */
+        margin: 0; /* 移除默认的 body margin */
+        overscroll-behavior-y: contain; /* 防止在移动设备上过度滚动导致页面刷新 */
+      }
+      /* 自定义滚动条 (Webkit 浏览器) */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #a1a1a1;
+      }
+      /* 确保 #app 元素至少占满整个视口高度，以便 flex 布局正常工作 */
+      html, body, #app {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <strong>We're sorry but this application doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
+    </noscript>
+    <div id="app"></div>
+    </body>
+</html>
